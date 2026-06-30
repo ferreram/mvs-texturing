@@ -18,7 +18,7 @@
 #include "tbb/parallel_for.h"
 #include "tbb/blocked_range.h"
 #include "tbb/concurrent_vector.h"
-#include "tbb/atomic.h"
+#include <atomic>
 
 #include "header/parallel_templates.h"
 #include "header/costs.h"
@@ -319,7 +319,8 @@ compute_contiguous_ids(
     tbb::blocked_range<luint_t> supernode_range(0, m_num_supernodes);
 
     /* assign new IDs to all nodes and count supernode sizes */
-    std::vector<tbb::atomic<luint_t>> supernode_sizes(m_num_supernodes, 0);
+    std::vector<std::atomic<luint_t>> supernode_sizes(m_num_supernodes);
+    for(auto& s : supernode_sizes) s = 0;
     tbb::parallel_for(node_range,
         [&](const tbb::blocked_range<luint_t>& r)
         {
@@ -365,7 +366,7 @@ compute_contiguous_ids(
             {
                 const luint_t supernode = m_current->prev_node_in_group[n];
                 const luint_t loc_offset = supernode_sizes[supernode].
-                    fetch_and_increment();
+                    fetch_add(1);
                 m_supernode_list[m_supernode_offsets[supernode] + loc_offset] =
                     n;
             }

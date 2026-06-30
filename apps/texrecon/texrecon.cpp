@@ -10,7 +10,9 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
-#include <tbb/task_scheduler_init.h>
+#include <tbb/global_control.h>
+#include <tbb/task_arena.h>
+#include <memory>
 #include <omp.h>
 
 #include <util/timer.h>
@@ -60,7 +62,10 @@ int main(int argc, char **argv) {
     }
 
     // Set the number of threads to use.
-    tbb::task_scheduler_init schedule(conf.num_threads > 0 ? conf.num_threads : tbb::task_scheduler_init::automatic);
+    std::unique_ptr<tbb::global_control> tbb_ctrl;
+    if (conf.num_threads > 0)
+        tbb_ctrl = std::make_unique<tbb::global_control>(
+            tbb::global_control::max_allowed_parallelism, conf.num_threads);
     if (conf.num_threads > 0) {
         omp_set_dynamic(0);
         omp_set_num_threads(conf.num_threads);

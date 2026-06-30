@@ -16,7 +16,7 @@
 #include <tbb/parallel_reduce.h>
 #include <tbb/parallel_scan.h>
 #include <tbb/blocked_range.h>
-#include <tbb/atomic.h>
+#include <atomic>
 
 #include "header/defines.h"
 #include "header/vector_types.h"
@@ -105,7 +105,7 @@ protected:
     VALTYPE m_max_val;
     INDEXTYPE m_length;
 
-    std::vector<tbb::atomic<VALTYPE>> m_histogram;
+    std::vector<std::atomic<VALTYPE>> m_histogram;
     std::vector<VALTYPE> m_final_histogram;
 };
 

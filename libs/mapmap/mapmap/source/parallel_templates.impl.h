@@ -266,8 +266,8 @@ Histogram<VALTYPE, INDEXTYPE>::
 operator()(
     const tbb::blocked_range<INDEXTYPE>& r)
 {
-    m_histogram.resize(r.end());
-    std::fill(m_histogram.begin(), m_histogram.end(), 0);
+    std::vector<std::atomic<VALTYPE>>(r.end()).swap(m_histogram);
+    std::fill(m_histogram.begin(), m_histogram.end(), (VALTYPE)0);
 
     m_final_histogram.clear();
     m_final_histogram.resize(r.end(), (VALTYPE) 0);

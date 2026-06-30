@@ -13,7 +13,6 @@
 
 #include "tbb/blocked_range.h"
 #include "tbb/parallel_for.h"
-#include "tbb/parallel_do.h"
 
 #include "header/parallel_templates.h"
 
@@ -149,8 +148,8 @@ sample(
     m_w_new.reserve(num_nodes);
 
     /* clear markers */
-    m_markers.clear();
-    m_markers.resize(num_nodes, 0u);
+    std::vector<std::atomic<luint_t>>(num_nodes).swap(m_markers);
+    for(auto& m : m_markers) m = 0u;
 
     /* put roots into queue */
     for(const luint_t r : roots)
@@ -159,9 +158,9 @@ sample(
     m_rem_nodes -= roots.size();
 
     /* copy original degrees and initialize locks */
-    m_node_locks.resize(num_nodes);
+    std::vector<std::atomic<unsigned char>>(num_nodes).swap(m_node_locks);
     m_rem_degrees.resize(num_nodes);
-    m_in_queue.resize(num_nodes);
+    std::vector<std::atomic<unsigned char>>(num_nodes).swap(m_in_queue);
 
     for(luint_t i = 0; i < num_nodes; ++i)
         m_rem_degrees[i] = this->m_graph->nodes()[i].incident_edges.size();
@@ -284,7 +283,8 @@ sample_phase_I()
              * try to acquire lock, if not accessible - then other thread
              * already handles this node, so just skip it
              */
-            if(m_node_locks[in_node].compare_and_swap(1u, 0u) == 0u)
+            unsigned char nl_exp = 0u;
+            if(m_node_locks[in_node].compare_exchange_strong(nl_exp, (unsigned char)1u))
             {
                 if(m_rem_degrees[in_node] > 0u)
                 {
@@ -302,8 +302,9 @@ sample_phase_I()
                         e.node_b : e.node_a);
 
                     /* try to acquire lock on adjacent node */
-                    if(m_node_locks[o_node].compare_and_swap(1u, 0u)
-                        == 0u)
+                    unsigned char on_exp = 0u;
+                    if(m_node_locks[o_node].compare_exchange_strong(on_exp,
+                        (unsigned char)1u))
                     {
                         /* check conditions for growing a branch */
                         const bool is_in_tree =
@@ -338,7 +339,7 @@ sample_phase_I()
                             this->m_adj[this->m_adj_offsets[in_node] +
                             m_rem_degrees[in_node] - 1]);
 
-                        if(!m_in_queue[in_node].fetch_and_store(1))
+                        if(!m_in_queue[in_node].exchange((unsigned char)1))
                             m_w_out->push_back(in_node);
                     }
                     --m_rem_degrees[in_node];
@@ -349,7 +350,7 @@ sample_phase_I()
             }
             else
             {
-                if(!m_in_queue[in_node].fetch_and_store(1))
+                if(!m_in_queue[in_node].exchange((unsigned char)1))
                     m_w_out->push_back(in_node);
             }
         }
@@ -401,7 +402,7 @@ sample_phase_II()
                 }
 
                 /* update marker and remove node from consideration */
-                if(m_markers[o_node].fetch_and_increment() == 1 &&
+                if(m_markers[o_node].fetch_add(1) == 1 &&
                     !o_in_tree)
                     --m_rem_nodes;
             }
@@ -450,7 +451,8 @@ sample_phase_III()
              * and thus multiple removals would corrupt the marker
              * decrement process.
              */
-            if(m_node_locks[remove_node].compare_and_swap(1u, 0u) == 0u)
+            unsigned char rn_exp = 0u;
+            if(m_node_locks[remove_node].compare_exchange_strong(rn_exp, (unsigned char)1u))
             {
                 const bool is_in_tree = (m_tree->raw_parent_ids()
                     [remove_node] != invalid_luint_t);
@@ -475,7 +477,7 @@ sample_phase_III()
                         ++m_rem_degrees[old_parent];
 
                     /* rollback parent and put it into queue */
-                    if(!m_in_queue[old_parent].fetch_and_store(1))
+                    if(!m_in_queue[old_parent].exchange((unsigned char)1))
                         m_w_out->push_back(old_parent);
                 }
 
@@ -504,7 +506,7 @@ sample_phase_III()
                 invalid_luint_t);
 
             /* if marker-threshold passed while decrementing, reconsider node */
-            if(m_markers[o_node].fetch_and_decrement() == 2 && !o_in_tree)
+            if(m_markers[o_node].fetch_sub(1) == 2 && !o_in_tree)
             {
                 /* abuse m_in_queue to correctly handle reconsideration */
                 m_in_queue[o_node] = 255;

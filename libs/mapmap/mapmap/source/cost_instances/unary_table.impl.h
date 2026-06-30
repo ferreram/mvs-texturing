@@ -14,7 +14,6 @@
 #include "tbb/parallel_for.h"
 #include "tbb/blocked_range.h"
 #include "tbb/parallel_scan.h"
-#include "tbb/parallel_do.h"
 
 #include "header/cost_instances/unary_table.h"
 #include "header/parallel_templates.h"

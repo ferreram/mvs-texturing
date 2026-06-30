@@ -11,7 +11,7 @@
 
 #include <algorithm>
 
-#include "tbb/atomic.h"
+#include <atomic>
 #include "tbb/parallel_reduce.h"
 #include "tbb/parallel_for.h"
 #include "tbb/mutex.h"
@@ -69,10 +69,11 @@ color_graph(
     std::iota(conf_in->begin(), conf_in->end(), 0);
 
     /* acc: use max_d as initial number of colors */
-    tbb::atomic<luint_t> k = 1;
+    std::atomic<luint_t> k{1};
 
     /* use atomics for colors */
-    std::vector<tbb::atomic<luint_t>> atom_colors(n, 0);
+    std::vector<std::atomic<luint_t>> atom_colors(n);
+    for(auto& a : atom_colors) a = 0;
 
     std::vector<char> conf_arrays((k + 1) * conf_in->size());
     while(!conf_in->empty())
@@ -121,7 +122,8 @@ color_graph(
                 /* still not conflict-free? need to add one color */
                 if(forbidden[new_color])
                 {
-                    k.compare_and_swap(old_k + 1, old_k);
+                    luint_t k_expected = old_k;
+                    k.compare_exchange_strong(k_expected, old_k + 1);
                     new_color = old_k + 1;
                 }
 
@@ -176,7 +178,7 @@ color_graph(
 
     /* copy coloring from atomics */
     coloring.resize(n);
-    std::copy(atom_colors.begin(), atom_colors.end(), coloring.begin());
+    for(luint_t i = 0; i < n; ++i) coloring[i] = atom_colors[i].load();
 }
 
 NS_MAPMAP_END
